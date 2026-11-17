@@ -11,23 +11,34 @@ function getElectronApp() {
   }
 }
 
-function getDbPath() {
+const OUTLETS = [
+  { id: 'cafe-eat-meat', name: 'Cafe Eat & Meat', file: 'cafepos.db' },
+  { id: 'cafe-eat-meat-bar', name: 'Cafe Eat & Meat Bar', file: 'cafe-eat-meat-bar.db' },
+  { id: 'cafe-eat-meat-bbq', name: 'Cafe Eat & Meat BBQ', file: 'cafe-eat-meat-bbq.db' },
+];
+
+function getDbPath(outletId = 'cafe-eat-meat') {
+  const outlet = OUTLETS.find((item) => item.id === outletId);
+  if (!outlet) throw new Error('Invalid outlet selection.');
   const app = getElectronApp();
   return app
-    ? path.join(app.getPath('userData'), 'cafepos.db')
-    : path.join(__dirname, '../../../cafepos.db');
+    ? path.join(app.getPath('userData'), outlet.file)
+    : path.join(__dirname, '../../../', outlet.file);
 }
 
 let db;
 let initializationError;
 let initialized = false;
-function initialize() {
-  if (initialized && db) return db;
+let activeOutletId = null;
+function initialize(outletId = 'cafe-eat-meat') {
+  if (!OUTLETS.some((item) => item.id === outletId)) throw new Error('Invalid outlet selection.');
+  if (initialized && db && activeOutletId === outletId) return db;
 
   try {
-    if (!db) {
-      db = new Database(getDbPath());
-    }
+    if (db && db.open) db.close();
+    db = new Database(getDbPath(outletId));
+    activeOutletId = outletId;
+    initialized = false;
 
     db.pragma('journal_mode = WAL');
     db.pragma('foreign_keys = ON');
@@ -1053,15 +1064,21 @@ function getKitchenAuditLogs(f = {}) {
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-function login(username, password) {
+function loginAcrossOutlets(username, password) {
   try {
-    const database = ensureInitialized();
-    const user = database.prepare('SELECT * FROM staff WHERE username = ? AND active = 1').get(username);
-    if (!user || !bcrypt.compareSync(password, user.password)) {
-      return { success: false, message: 'Invalid username or password' };
+    const allowedOutlets = [];
+    let authenticatedUser = null;
+    for (const outlet of OUTLETS) {
+      initialize(outlet.id);
+      const user = db.prepare('SELECT * FROM staff WHERE username = ? AND active = 1').get(username);
+      if (user && bcrypt.compareSync(password, user.password)) {
+        const { password: _password, ...safe } = user;
+        authenticatedUser = safe;
+        allowedOutlets.push({ id: outlet.id, name: outlet.name });
+      }
     }
-    const { password: _, ...safe } = user;
-    return { success: true, user: safe };
+    if (!authenticatedUser) return { success: false, message: 'Invalid username or password' };
+    return { success: true, user: authenticatedUser, outlets: allowedOutlets };
   } catch (error) {
     console.error('Login failed because the database is unavailable:', error);
     return { success: false, message: error.message || 'Database is not available' };
@@ -1328,7 +1345,7 @@ function resetRevenue() {
 }
 
 module.exports = {
- initialize, ensureInitialized, getInitializationError, login,
+ initialize, ensureInitialized, getInitializationError, loginAcrossOutlets,
   getAllProducts, createProduct, updateProduct, deleteProduct, getLowStockProducts,
   getAllCategories, createCategory, deleteCategory,
     getSetting, setSetting,
