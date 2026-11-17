@@ -1,6 +1,7 @@
 import React, { useState, createContext, useContext, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage    from './pages/LoginPage';
+import OutletSelectionPage from './pages/OutletSelectionPage';
 import Layout       from './components/Layout';
 import POSPage      from './pages/POSPage';
 import DashboardPage from './pages/DashboardPage';
@@ -50,6 +51,8 @@ function AdminOnly({ children }) {
 // ── App ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [user,     setUser]     = useState(null);
+  const [outlets, setOutlets] = useState([]);
+  const [selectedOutlet, setSelectedOutlet] = useState(null);
   const [toasts,   setToasts]   = useState([]);
   const [apiReady, setApiReady] = useState(false);
 
@@ -79,6 +82,8 @@ export default function App() {
         return { success: false, message: 'Your role is not allowed to access this system.' };
       }
       setUser(r.user);
+      setOutlets(r.outlets || []);
+      setSelectedOutlet(null);
       return { success: true };
     } catch (error) {
       console.error('Login failed:', error);
@@ -87,16 +92,30 @@ export default function App() {
 
   };
 
-  const logout = () => { setUser(null); showToast('Logged out', 'info'); };
+  const selectOutlet = async (outlet) => {
+    if (!window.api || !outlet?.id) return { success: false, message: 'Invalid outlet.' };
+    try {
+      const result = await window.api.selectOutlet(outlet.id);
+      if (!result?.success) return { success: false, message: result?.message || 'Unable to open outlet.' };
+      setSelectedOutlet(outlet);
+      return { success: true };
+    } catch (error) { return { success: false, message: error.message || 'Unable to open outlet.' }; }
+  };
+  const backToOutlets = () => setSelectedOutlet(null);
+  const logout = () => { setUser(null); setOutlets([]); setSelectedOutlet(null); showToast('Logged out', 'info'); };
 
   // Context value — useMemo so isAdmin is always fresh
   const ctx = useMemo(() => ({
     user,
     isAdmin: user?.role === 'admin',
+    outlets,
+    selectedOutlet,
+    selectOutlet,
+    backToOutlets,
     showToast,
     login,
     logout,
-  }), [user]); // eslint-disable-line
+  }), [user, outlets, selectedOutlet]); // eslint-disable-line
 
   if (!apiReady) return <Splash />;
 
@@ -105,10 +124,11 @@ export default function App() {
       <HashRouter>
         <Routes>
           {/* Public */}
-          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" replace />} />
+          <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/outlets" replace />} />
+          <Route path="/outlets" element={user ? (!selectedOutlet ? <OutletSelectionPage /> : <Navigate to="/" replace />) : <Navigate to="/login" replace />} />
 
           {/* Authenticated layout */}
-          <Route path="/" element={user ? <Layout /> : <Navigate to="/login" replace />}>
+          <Route path="/" element={user && selectedOutlet ? <Layout /> : <Navigate to={user ? '/outlets' : '/login'} replace />}>
             <Route index element={<DashboardPage />} />
             <Route path="pos"       element={<POSPage />} />
             <Route path="inventory" element={<InventoryPage />} />
