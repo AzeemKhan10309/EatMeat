@@ -84,7 +84,13 @@ app.on('activate', () => {
 
 function registerIPC() {
   // AUTH
-  ipcMain.handle('auth:login', (_, creds) => db.login(creds.username, creds.password));
+  ipcMain.handle('auth:login', (_, creds) => db.loginAcrossOutlets(creds.username, creds.password));
+  ipcMain.handle('outlets:select', (_, outletId) => {
+    const allowed = ['cafe-eat-meat', 'cafe-eat-meat-bar', 'cafe-eat-meat-bbq'];
+    if (!allowed.includes(outletId)) return { success: false, message: 'Invalid outlet selection.' };
+    try { db.initialize(outletId); return { success: true, outletId }; }
+    catch (error) { return { success: false, message: error.message || 'Unable to open outlet database.' }; }
+  });
   ipcMain.handle('auth:logout', () => ({ success: true }));
 
   // PRODUCTS
