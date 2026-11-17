@@ -510,8 +510,6 @@ async function printReceipt(data, preferredPrinterName = null) {
     }
 
     await printRaw(detection.printer.name, text);
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    await printRaw(detection.printer.name, text);
 
     return {
       success: true,
