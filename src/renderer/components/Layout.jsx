@@ -7,7 +7,7 @@ const { BUSINESS_INFO } = require('../../shared/businessInfo');
 const CAFE = BUSINESS_INFO.name;
 
 export default function Layout() {
-  const { user, isAdmin, logout } = useApp();
+  const { user, isAdmin, logout, selectedOutlet, backToOutlets } = useApp();
   const navigate = useNavigate();
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -43,7 +43,7 @@ export default function Layout() {
             <div style={{ width:42, height:42, background:'linear-gradient(135deg,#4F46E5,#7C3AED)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>☕</div>
             <div>
               <div style={{ fontWeight:800, fontSize:13, lineHeight:1.2 }}>{CAFE}</div>
-              <div style={{ fontSize:10, color:'var(--text-dim)', marginTop:2 }}>POS System</div>
+              <div style={{ fontSize:10, color:'var(--text-dim)', marginTop:2 }}>POS System · {selectedOutlet?.name}</div>
             </div>
           </div>
         </div>
@@ -87,6 +87,7 @@ export default function Layout() {
               <span style={{ fontSize:10, fontWeight:700, textTransform:'uppercase', color:rc, letterSpacing:'.3px' }}>{user?.role}</span>
             </div>
           </div>
+          <button className="btn btn-ghost btn-sm" style={{ width:'100%', justifyContent:'center', fontSize:11, marginBottom:6 }} onClick={() => { backToOutlets(); navigate('/outlets'); }}>↩ Back to Outlet Selection</button>
           <button className="btn btn-ghost btn-sm" style={{ width:'100%', justifyContent:'center', fontSize:11 }} onClick={handleLogout}>🚪 Logout</button>
         </div>
       </aside>
