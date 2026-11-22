@@ -289,6 +289,7 @@ function printRaw(printerName, text) {
     const psFile = path.join(os.tmpdir(), `receipt_print_${process.pid}_${Date.now()}.ps1`);
 
     const ESC = '\x1B';
+    const GS = '\x1D';
     
     // ESC/POS command sequence: initialize, center, receipt content, feed, and cut.
     const data =
@@ -404,6 +405,35 @@ function centerText(value, width = RECEIPT_WIDTH) {
   return `${' '.repeat(left)}${text}`;
 }
 
+function wrapReceiptText(value, width) {
+  return String(value || '').split(/\r?\n/).flatMap((line) => {
+    const words = line.trim().split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+
+    words.forEach((word) => {
+      while (word.length > width) {
+        if (current) {
+          lines.push(current);
+          current = '';
+        }
+        lines.push(word.slice(0, width));
+        word = word.slice(width);
+      }
+
+      if (!current) current = word;
+      else if (current.length + word.length + 1 <= width) current += ` ${word}`;
+      else {
+        lines.push(current);
+        current = word;
+      }
+    });
+
+    if (current) lines.push(current);
+    return lines;
+  });
+}
+
 function getReceiptBusinessInfo(cafe = {}) {
   return {
     ...BUSINESS_INFO,
@@ -431,6 +461,7 @@ function formatReceipt(data) {
     total,
     paymentMethod,
     date,
+    notes = '',
   } = data;
 
 const business = getReceiptBusinessInfo(cafe);
@@ -476,6 +507,7 @@ const business = getReceiptBusinessInfo(cafe);
   const discountLabel = discountType === 'percent'
     ? `Discount (${parseFloat(discount || 0).toFixed(0)}%)`
     : 'Discount';
+  const noteLines = wrapReceiptText(notes, RECEIPT_WIDTH - 2);
 
   const footer = [
     dash,
@@ -484,6 +516,9 @@ const business = getReceiptBusinessInfo(cafe);
     serviceAmount > 0 ? `Service Tax (${parseFloat(serviceRate || 0).toFixed(0)}%) : ${money(serviceAmount)}` : '',
     taxAmount > 0 ? `VAT Tax (${parseFloat(taxRate || 0).toFixed(0)}%) : ${money(taxAmount)}` : '',
     `Total    : ${money(total)}`,
+    noteLines.length ? dash : '',
+    noteLines.length ? 'Notes:' : '',
+    ...noteLines.map((noteLine) => `  ${noteLine}`),
     line,
     thankYou,
   ].filter(Boolean);

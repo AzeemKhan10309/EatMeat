@@ -9,7 +9,8 @@
     "webpack:dev": "webpack serve --config webpack.config.js --mode development",
     "electron:start": "wait-on tcp:3000 && electron .",
     "build:react": "webpack --config webpack.config.js --mode production",
-    "build": "npm run build:react && electron-builder --win",
+    "clean:build": "node -e \"const fs = require('fs'); for (const dir of ['dist', 'dist-electron']) fs.rmSync(dir, { recursive: true, force: true });\"",
+    "build": "npm run clean:build && npm run build:react && electron-builder --win nsis --x64",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -49,34 +50,39 @@
     "appId": "com.cafepos.app",
     "productName": "CafePOS",
     "asar": true,
-    "directories": {
-      "output": "dist-electron"
-    },
-    "files": [
-      "dist/**/*",
-      "src/main/**/*",
-      "src/shared/**/*",
-      "node_modules/**/*",
-      "package.json"
-    ],
-    "extraResources": [
+  "asarUnpack": [
+    "**/*.node"
+  ],
+  "directories": {
+    "buildResources": "assets",
+    "output": "dist-electron"
+  },
+  "files": [
+    "dist/**/*",
+    "src/main/**/*",
+    "src/shared/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": [
       {
-        "from": "assets/",
-        "to": "assets/",
-        "filter": [
-          "**/*"
+        "target": "nsis",
+        "arch": [
+          "x64"
         ]
       }
     ],
-    "win": {
-      "target": "nsis",
-      "icon": "assets/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
-    }
+    "icon": "assets/icon.ico"
+  },
+  "nsis": {
+    "artifactName": "CafePOS-Setup-${version}.${ext}",
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "CafePOS",
+    "deleteAppDataOnUninstall": false
+  }
   }
 }

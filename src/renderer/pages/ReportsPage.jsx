@@ -76,6 +76,7 @@ async function handleReprintOrder(order) {
       total: fullOrder.total,
       paymentMethod: fullOrder.payment_method,
       staffName: fullOrder.staff_name,
+      notes: fullOrder.notes || '',
       date: new Date(fullOrder.created_at).toLocaleString('en-PK'),
     });
 

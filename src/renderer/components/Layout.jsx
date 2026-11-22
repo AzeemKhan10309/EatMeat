@@ -17,6 +17,7 @@ export default function Layout() {
   const navItems = [
     { to: '/',         label: 'Dashboard', icon: '📊', end: true },
     { to: '/pos',      label: 'POS Billing', icon: '🛒' },
+    { to: '/order-summary', label: 'Order Summary', icon: '🧾' },
     ...(isAdmin ? [
       { to: '/inventory', label: 'POS Inventory', icon: '📦' },
       { to: '/kitchen-inventory', label: 'Kitchen Inventory', icon: '🥘' },

@@ -12,6 +12,7 @@ import FinancePage  from './pages/FinancePage';
 import InvestmentsPage from './pages/InvestmentsPage';
 import KitchenInventoryPage from './pages/KitchenInventoryPage';
 import PrinterSettingsPage from './pages/PrinterSettingsPage';
+import OrderSummaryPage from './pages/OrderSummaryPage';
 const { BUSINESS_INFO } = require('../shared/businessInfo');
 export const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -131,6 +132,7 @@ export default function App() {
           <Route path="/" element={user && selectedOutlet ? <Layout /> : <Navigate to={user ? '/outlets' : '/login'} replace />}>
             <Route index element={<DashboardPage />} />
             <Route path="pos"       element={<POSPage />} />
+            <Route path="order-summary" element={<OrderSummaryPage />} />
             <Route path="inventory" element={<InventoryPage />} />
 
             {/* Admin-only pages */}

@@ -1,0 +1,281 @@
+import React, { useEffect, useState } from 'react';
+import { useApp } from '../App';
+const { BUSINESS_INFO } = require('../../shared/businessInfo');
+
+const fmt = value => `Rs. ${Number(value || 0).toLocaleString('en-PK', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})}`;
+
+function todayOrderKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseOrderDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const dateText = String(value);
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(dateText);
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(dateText)
+    ? `${dateText.replace(' ', 'T')}${hasTimezone ? '' : 'Z'}`
+    : dateText;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatOrderDateTime(value) {
+  const date = parseOrderDate(value);
+  return date ? date.toLocaleString('en-PK') : '—';
+}
+
+function formatOrderTime(value) {
+  const date = parseOrderDate(value);
+  return date ? date.toLocaleTimeString('en-PK', { hour: 'numeric', minute: '2-digit' }) : '—';
+}
+
+function buildReceiptDataFromOrder(order) {
+  const subtotal = Number(order.subtotal || 0);
+  const discount = Number(order.discount || 0);
+  const discountType = order.discount_type || 'flat';
+  const discountAmount = discountType === 'percent'
+    ? Math.min(subtotal * discount / 100, subtotal)
+    : Math.min(discount, subtotal);
+  const taxRate = Number(order.tax_rate || 0);
+  const taxAmount = Number(order.tax_amount || 0);
+  const taxableBase = Math.max(0, subtotal - discountAmount);
+  const total = Number(order.total || 0);
+  const serviceAmount = Math.max(0, total - taxableBase - taxAmount);
+  const serviceRate = taxableBase ? serviceAmount / taxableBase * 100 : 0;
+
+  return {
+    cafe: BUSINESS_INFO,
+    invoice: order.invoice_number,
+    items: order.items || [],
+    tableName: order.table_name || '',
+    subtotal,
+    discount,
+    discountAmount,
+    discountType,
+    taxRate,
+    taxAmount,
+    serviceRate,
+    serviceAmount,
+    total,
+    paymentMethod: order.payment_method,
+    paymentDetails: order.payment_details || {},
+    staffName: order.staff_name || '',
+    date: formatOrderDateTime(order.created_at),
+    notes: order.notes || '',
+  };
+}
+
+function DetailRow({ label, value, strong, color }) {
+  return (
+    <div style={{ display:'flex', justifyContent:'space-between', gap:16, padding:'5px 0', color:color || 'inherit' }}>
+      <span style={{ color:'var(--text-muted)', fontSize:13 }}>{label}</span>
+      <span style={{ fontWeight:strong ? 800 : 600, textAlign:'right' }}>{value}</span>
+    </div>
+  );
+}
+
+function OrderDetailsModal({ order, onClose, onPrint, printing }) {
+  const receipt = buildReceiptDataFromOrder(order);
+  const itemCount = receipt.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+  return (
+    <div
+      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}
+      style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.78)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, backdropFilter:'blur(4px)' }}
+    >
+      <div
+        onMouseDown={event => event.stopPropagation()}
+        style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:16, padding:26, width:650, maxWidth:'94vw', maxHeight:'90vh', overflowY:'auto' }}
+      >
+        <div style={{ display:'flex', justifyContent:'space-between', gap:12, marginBottom:18 }}>
+          <div>
+            <h2 style={{ fontSize:22, fontWeight:800 }}>Order {receipt.invoice}</h2>
+            <p style={{ color:'var(--text-muted)', fontSize:13 }}>{receipt.date}</p>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}>× Close</button>
+        </div>
+
+        <div className="card" style={{ padding:14, marginBottom:14 }}>
+          <DetailRow label="Table" value={receipt.tableName || '—'} />
+          <DetailRow label="Staff" value={receipt.staffName || '—'} />
+          <DetailRow label="Payment Method" value={receipt.paymentMethod || '—'} />
+          <DetailRow label="Items" value={itemCount} />
+        </div>
+
+        <div className="card" style={{ padding:0, overflow:'hidden', marginBottom:14 }}>
+          <table className="table">
+            <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+            <tbody>
+              {receipt.items.map((item, index) => (
+                <tr key={item.id || item.product_id || `${item.product_name}-${index}`}>
+                  <td>{item.product_name}</td>
+                  <td>{item.quantity}</td>
+                  <td>{fmt(item.price)}</td>
+                  <td>{fmt(item.subtotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="card" style={{ padding:14, marginBottom:14 }}>
+          <DetailRow label="Subtotal" value={fmt(receipt.subtotal)} />
+          <DetailRow
+            label={`Discount${receipt.discountType === 'percent' ? ` (${receipt.discount}%)` : ''}`}
+            value={`- ${fmt(receipt.discountAmount)}`}
+            color="var(--success)"
+          />
+          <DetailRow label={`Service Tax (${receipt.serviceRate.toFixed(0)}%)`} value={fmt(receipt.serviceAmount)} />
+          <DetailRow label={`VAT Tax (${receipt.taxRate}%)`} value={fmt(receipt.taxAmount)} />
+          <div style={{ borderTop:'1px solid var(--border)', marginTop:8, paddingTop:8 }}>
+            <DetailRow label="Grand Total" value={fmt(receipt.total)} strong />
+          </div>
+        </div>
+
+        {receipt.notes && (
+          <div className="card" style={{ padding:14, marginBottom:14 }}>
+            <div style={{ color:'var(--text-muted)', fontSize:12, marginBottom:6 }}>Order Notes</div>
+            <div>{receipt.notes}</div>
+          </div>
+        )}
+
+        <div style={{ display:'flex', justifyContent:'flex-end', gap:10 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+          <button className="btn btn-primary" onClick={() => onPrint(order)} disabled={printing}>
+            {printing ? 'Printing…' : '🖨️ Print Receipt'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function OrderSummaryPage() {
+  const { showToast } = useApp();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(null);
+  const [printingId, setPrintingId] = useState(null);
+  const today = todayOrderKey();
+
+  useEffect(() => {
+    loadTodayOrders();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadTodayOrders() {
+    setLoading(true);
+    try {
+      const rows = await window.api.getOrders({
+        start_date: today,
+        end_date: today,
+        use_local_date: true,
+      });
+      setOrders(Array.isArray(rows) ? rows : []);
+    } catch (error) {
+      showToast(error?.message || 'Could not load today’s orders', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function hydrateOrder(order) {
+    return order?.items ? order : window.api.getOrderById(order.id);
+  }
+
+  async function viewOrder(order) {
+    try {
+      const fullOrder = await hydrateOrder(order);
+      if (!fullOrder) return showToast('Order not found', 'error');
+      setSelected(fullOrder);
+    } catch (error) {
+      showToast(error?.message || 'Could not load order details', 'error');
+    }
+  }
+
+  async function printOrder(order) {
+    setPrintingId(order.id);
+    try {
+      const fullOrder = await hydrateOrder(order);
+      if (!fullOrder) return showToast('Order not found', 'error');
+      const result = await window.api.printReceipt(buildReceiptDataFromOrder(fullOrder));
+      if (result?.success) showToast(`Receipt ${fullOrder.invoice_number} reprinted`);
+      else showToast(result?.message || 'Reprint failed', 'error');
+    } catch (error) {
+      showToast(error?.message || 'Reprint failed', 'error');
+    } finally {
+      setPrintingId(null);
+    }
+  }
+
+  return (
+    <div style={{ height:'100%', minHeight:0, overflow:'hidden', padding:24, display:'flex', flexDirection:'column', gap:18 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+        <div>
+          <h1 style={{ fontSize:28, fontWeight:800 }}>Order Summary</h1>
+          <p style={{ color:'var(--text-muted)', fontSize:13 }}>POS Billing orders created today ({today})</p>
+        </div>
+        <button className="btn btn-ghost" onClick={loadTodayOrders} disabled={loading}>
+          {loading ? 'Refreshing…' : '↻ Refresh'}
+        </button>
+      </div>
+
+      <div className="card" style={{ padding:0, flex:1, minHeight:0, overflow:'auto' }}>
+        <table className="table">
+          <thead>
+            <tr>
+              {['Order', 'Time', 'Table', 'Items', 'Discount', 'Total', 'Payment', 'Action'].map(label => (
+                <th key={label} style={{ position:'sticky', top:0, zIndex:1, background:'var(--bg-card)' }}>{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => (
+              <tr key={order.id}>
+                <td>
+                  <strong>{order.invoice_number}</strong>
+                  <div style={{ color:'var(--text-dim)', fontSize:11 }}>{formatOrderDateTime(order.created_at)}</div>
+                </td>
+                <td>{formatOrderTime(order.created_at)}</td>
+                <td>{order.table_name || '—'}</td>
+                <td><button className="btn btn-sm btn-ghost" onClick={() => viewOrder(order)}>View</button></td>
+                <td>{fmt(order.discount)}</td>
+                <td><strong>{fmt(order.total)}</strong></td>
+                <td style={{ textTransform:'capitalize' }}>{order.payment_method}</td>
+                <td>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    <button className="btn btn-sm btn-ghost" onClick={() => viewOrder(order)}>View Order</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => printOrder(order)} disabled={printingId === order.id}>
+                      {printingId === order.id ? 'Printing…' : 'Print Receipt'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!orders.length && (
+          <div style={{ textAlign:'center', padding:46, color:'var(--text-dim)' }}>
+            {loading ? 'Loading today’s orders…' : 'No orders created today'}
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <OrderDetailsModal
+          order={selected}
+          onClose={() => setSelected(null)}
+          onPrint={printOrder}
+          printing={printingId === selected.id}
+        />
+      )}
+    </div>
+  );
+}

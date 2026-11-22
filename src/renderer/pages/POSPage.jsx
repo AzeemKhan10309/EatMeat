@@ -174,6 +174,7 @@ export default function POSPage() {
         total,
         paymentMethod:payMethod, paymentDetails: payMethod==='split'?splitAmt:{},
         cashGiven:parseFloat(cashGiven)||0, staffName:user.name,
+        notes,
         date:new Date().toLocaleString('en-PK'),
       });
 
